@@ -79,6 +79,7 @@ fn main() {
         bindgen::Builder::default()
             .clang_args(&clang_args_ffgl)
             .header("wrapper.h")
+            .layout_tests(false)
             .generate()
             .unwrap(),
         &out_dir.join("ffgl1.rs"),
@@ -88,6 +89,7 @@ fn main() {
         bindgen::Builder::default()
             .clang_args(&clang_args_ffgl2)
             .header("wrapper.h")
+            .layout_tests(false)
             .generate()
             .unwrap(),
         &out_dir.join("ffgl2.rs"),
