@@ -2,7 +2,7 @@ use build_common::transform_glsl;
 use ffgl_glium::glsl::get_best_transpilation_target;
 use glium::{
     backend::Facade, implement_vertex, index, uniforms::Uniforms, Blend, DrawError, DrawParameters,
-    Program, ProgramCreationError, Smooth, Surface, VertexBuffer,
+    Program, ProgramCreationError, Surface, VertexBuffer,
 };
 
 use crate::util::{GlProgramCreationError, MultiUniforms};
@@ -17,7 +17,6 @@ impl FullscreenFrag {
     pub fn new(facade: &impl Facade, frag: &str) -> Result<Self, GlProgramCreationError> {
         let params = DrawParameters {
             dithering: true,
-            smooth: Some(Smooth::Fastest),
             blend: Blend::alpha_blending(),
             ..Default::default()
         };

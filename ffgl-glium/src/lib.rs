@@ -71,6 +71,36 @@ impl FFGLGlium {
         frame_data: GLInput<'_>,
         render_frame: &mut impl FnMut(&mut DefaultSurface, Vec<Texture2d>) -> Result<(), Box<dyn Error>>,
     ) {
+        // Save host GL state — glium manages its own VAOs/VBOs/programs/textures
+        // and will leak them into the host context if we don't restore.
+        let (host_vao, host_vbo, host_program, host_active_tex, host_tex0,
+             host_viewport, host_fbo_draw, host_fbo_read,
+             host_scissor, host_blend, host_depth) = unsafe {
+            let mut vao: gl::types::GLint = 0;
+            let mut vbo: gl::types::GLint = 0;
+            let mut prog: gl::types::GLint = 0;
+            let mut active_tex: gl::types::GLint = 0;
+            let mut tex0: gl::types::GLint = 0;
+            let mut viewport: [gl::types::GLint; 4] = [0; 4];
+            let mut fbo_draw: gl::types::GLint = 0;
+            let mut fbo_read: gl::types::GLint = 0;
+            gl::GetIntegerv(gl::VERTEX_ARRAY_BINDING, &mut vao);
+            gl::GetIntegerv(gl::ARRAY_BUFFER_BINDING, &mut vbo);
+            gl::GetIntegerv(gl::CURRENT_PROGRAM, &mut prog);
+            gl::GetIntegerv(gl::ACTIVE_TEXTURE, &mut active_tex);
+            gl::ActiveTexture(gl::TEXTURE0);
+            gl::GetIntegerv(gl::TEXTURE_BINDING_2D, &mut tex0);
+            gl::ActiveTexture(active_tex as gl::types::GLenum);
+            gl::GetIntegerv(gl::VIEWPORT, viewport.as_mut_ptr());
+            gl::GetIntegerv(gl::DRAW_FRAMEBUFFER_BINDING, &mut fbo_draw);
+            gl::GetIntegerv(gl::READ_FRAMEBUFFER_BINDING, &mut fbo_read);
+            let scissor = gl::IsEnabled(gl::SCISSOR_TEST) == gl::TRUE;
+            let blend = gl::IsEnabled(gl::BLEND) == gl::TRUE;
+            let depth = gl::IsEnabled(gl::DEPTH_TEST) == gl::TRUE;
+            (vao, vbo, prog, active_tex, tex0, viewport, fbo_draw, fbo_read,
+             scissor, blend, depth)
+        };
+
         unsafe {
             self.ctx.rebuild(self.backend.clone()).unwrap();
             // make glium think it's drawing to the default framebuffer
@@ -155,17 +185,21 @@ impl FFGLGlium {
 
         frame.finish().unwrap();
 
-        // unsafe {
-        //     // gl::BindFramebuffer(gl::READ_FRAMEBUFFER, 0);
-        //     gl::BindFramebuffer(gl::DRAW_FRAMEBUFFER, frame_data.host);
-        //     blit_fb(render_res, blit_target_size);
-        // }
-
-        //reset to what host expects
-        // gl_reset(frame_data);
-        // validate::validate_context_state();
-
-        // validate_viewport(&viewport);
+        // Restore host GL state
+        unsafe {
+            gl::BindFramebuffer(gl::DRAW_FRAMEBUFFER, host_fbo_draw as gl::types::GLuint);
+            gl::BindFramebuffer(gl::READ_FRAMEBUFFER, host_fbo_read as gl::types::GLuint);
+            gl::Viewport(host_viewport[0], host_viewport[1], host_viewport[2], host_viewport[3]);
+            gl::UseProgram(host_program as gl::types::GLuint);
+            gl::BindVertexArray(host_vao as gl::types::GLuint);
+            gl::BindBuffer(gl::ARRAY_BUFFER, host_vbo as gl::types::GLuint);
+            gl::ActiveTexture(gl::TEXTURE0);
+            gl::BindTexture(gl::TEXTURE_2D, host_tex0 as gl::types::GLuint);
+            gl::ActiveTexture(host_active_tex as gl::types::GLenum);
+            if host_scissor { gl::Enable(gl::SCISSOR_TEST); } else { gl::Disable(gl::SCISSOR_TEST); }
+            if host_blend { gl::Enable(gl::BLEND); } else { gl::Disable(gl::BLEND); }
+            if host_depth { gl::Enable(gl::DEPTH_TEST); } else { gl::Disable(gl::DEPTH_TEST); }
+        }
     }
 
     // use this before a draw call to make glium think it's drawing to the default framebuffer
