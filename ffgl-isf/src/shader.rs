@@ -4,7 +4,11 @@ use ffgl_glium::glsl::get_best_transpilation_target;
 use glium::{
     backend::Facade,
     texture::{MipmapsOption, UncompressedFloatFormat},
-    uniforms::{AsUniformValue, UniformValue, Uniforms},
+    uniforms::{
+        AsUniformValue, MagnifySamplerFilter, MinifySamplerFilter, SamplerBehavior,
+        SamplerWrapFunction,
+        UniformValue, Uniforms,
+    },
     DrawError, Surface, Texture2d,
 };
 use isf::{Isf, Pass};
@@ -23,6 +27,24 @@ pub struct IsfShader {
     frame_count: u32,
 }
 
+/// Sampler for pass targets. glium's default wraps with Mirror, so a bilinear read
+/// within half a texel of an edge blends the edge with itself instead of the
+/// opposite side — shaders that wrap uv with fract() (feedback loops, fluid sims)
+/// get a seam at every frame edge. Repeat makes wrapped reads continuous; reads at
+/// texel centres, which is all non-wrapping shaders do, are unaffected.
+fn pass_sampler() -> SamplerBehavior {
+    SamplerBehavior {
+        wrap_function: (
+            SamplerWrapFunction::Repeat,
+            SamplerWrapFunction::Repeat,
+            SamplerWrapFunction::Repeat,
+        ),
+        minify_filter: MinifySamplerFilter::Linear,
+        magnify_filter: MagnifySamplerFilter::Linear,
+        ..Default::default()
+    }
+}
+
 struct PassTexture {
     pass: Pass,
     texture: Texture2d,
@@ -31,7 +53,7 @@ struct PassTexture {
 impl Uniforms for PassTexture {
     fn visit_values<'a, F: FnMut(&str, UniformValue<'a>)>(&'a self, mut f: F) {
         if let Some(name) = self.pass.target.as_ref() {
-            f(name, self.texture.as_uniform_value());
+            f(name, UniformValue::Texture2d(&self.texture, Some(pass_sampler())));
         }
     }
 }
@@ -198,7 +220,7 @@ impl<U: Uniforms> Uniforms for IsfUniforms<'_, U> {
         f("PASSINDEX", self.pass_index.as_uniform_value());
         for PassTexture { pass, texture } in self.passes {
             if let Some(name) = pass.target.as_ref() {
-                f(name, texture.as_uniform_value());
+                f(name, UniformValue::Texture2d(texture, Some(pass_sampler())));
                 f(
                     &format!("{name}_size"),
                     UniformValue::Vec2([
