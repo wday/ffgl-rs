@@ -88,6 +88,8 @@ fn texture_from_pass(
         size.1,
     )
     .expect("Failed to create texture");
+    // New storage is undefined; persistent passes would feed back whatever it holds.
+    texture.as_surface().clear_color(0.0, 0.0, 0.0, 0.0);
 
     Ok(texture)
 }

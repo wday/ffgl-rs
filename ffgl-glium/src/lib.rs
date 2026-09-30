@@ -196,6 +196,15 @@ impl FFGLGlium {
             gl::ActiveTexture(gl::TEXTURE0);
             gl::BindTexture(gl::TEXTURE_2D, host_tex0 as gl::types::GLuint);
             gl::ActiveTexture(host_active_tex as gl::types::GLenum);
+            // glium binds sampler objects to the units it samples with an explicit
+            // SamplerBehavior, and a bound sampler overrides the filter/wrap of whatever
+            // the host samples on that unit next. Unbind them; the rebuild above reset
+            // glium's state cache, so it rebinds them on the next draw.
+            if gl::BindSampler::is_loaded() {
+                for unit in 0..16 {
+                    gl::BindSampler(unit, 0);
+                }
+            }
             if host_scissor { gl::Enable(gl::SCISSOR_TEST); } else { gl::Disable(gl::SCISSOR_TEST); }
             if host_blend { gl::Enable(gl::BLEND); } else { gl::Disable(gl::BLEND); }
             if host_depth { gl::Enable(gl::DEPTH_TEST); } else { gl::Disable(gl::DEPTH_TEST); }
